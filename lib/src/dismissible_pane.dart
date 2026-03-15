@@ -110,17 +110,20 @@ class _DismissiblePaneState extends State<DismissiblePane> {
       return true;
     }());
     controller = Slidable.of(context);
-    controller!.dismissGesture.addListener(handleDismissGestureChanged);
+    controller?.dismissGesture.addListener(handleDismissGestureChanged);
   }
 
   @override
   void dispose() {
-    controller!.dismissGesture.removeListener(handleDismissGestureChanged);
+    controller?.dismissGesture.removeListener(handleDismissGestureChanged);
     super.dispose();
   }
 
   Future<void> handleDismissGestureChanged() async {
-    final position = controller!.animation.value;
+    final ctrl = controller;
+    if (ctrl == null) return;
+
+    final position = ctrl.animation.value;
 
     // If we're currently past the threshold, trigger the action regardless of gesture type
     if (position >= widget.dismissThreshold) {
@@ -128,18 +131,22 @@ class _DismissiblePaneState extends State<DismissiblePane> {
       if (widget.confirmDismiss != null) {
         canDismiss = await widget.confirmDismiss!();
       }
+      // The widget may have been disposed during the async confirmDismiss
+      // callback (e.g. if the action triggers a state change that rebuilds
+      // the list). Guard all subsequent controller calls.
+      if (!mounted) return;
       if (canDismiss) {
-        controller!.dismiss(
+        ctrl.dismiss(
           ResizeRequest(widget.resizeDuration, widget.onDismissed),
           duration: widget.dismissalDuration,
         );
       } else if (widget.closeOnCancel) {
-        controller!.close();
+        ctrl.close();
       }
       return;
     }
 
-    controller!.openCurrentActionPane();
+    ctrl.openCurrentActionPane();
   }
 
   @override

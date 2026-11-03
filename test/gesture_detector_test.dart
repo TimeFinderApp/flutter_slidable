@@ -18,17 +18,19 @@ void main() {
     testWidgets('can slide horizontally', (tester) async {
       final slidableController = SlidableController(const TestVSync());
 
-      await tester.pumpWidget(Center(
-        child: SizedBox(
-          height: 200,
-          width: 100,
-          child: SlidableGestureDetector(
-            controller: slidableController,
-            direction: Axis.horizontal,
-            child: const SizedBox.expand(),
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            height: 200,
+            width: 100,
+            child: SlidableGestureDetector(
+              controller: slidableController,
+              direction: Axis.horizontal,
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
-      ));
+      );
 
       const posDelta = Offset(10, 0);
       const negDelta = Offset(-10, 0);
@@ -46,17 +48,19 @@ void main() {
     testWidgets('can slide vertically', (tester) async {
       final slidableController = SlidableController(const TestVSync());
 
-      await tester.pumpWidget(Center(
-        child: SizedBox(
-          height: 100,
-          width: 200,
-          child: SlidableGestureDetector(
-            controller: slidableController,
-            direction: Axis.vertical,
-            child: const SizedBox.expand(),
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            height: 100,
+            width: 200,
+            child: SlidableGestureDetector(
+              controller: slidableController,
+              direction: Axis.vertical,
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
-      ));
+      );
 
       const posDelta = Offset(0, 10);
       const negDelta = Offset(0, -10);
@@ -74,18 +78,20 @@ void main() {
     testWidgets('cannot slide horizontally if asked', (tester) async {
       final slidableController = SlidableController(const TestVSync());
 
-      await tester.pumpWidget(Center(
-        child: SizedBox(
-          height: 200,
-          width: 100,
-          child: SlidableGestureDetector(
-            enabled: false,
-            controller: slidableController,
-            direction: Axis.horizontal,
-            child: const SizedBox.expand(),
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            height: 200,
+            width: 100,
+            child: SlidableGestureDetector(
+              enabled: false,
+              controller: slidableController,
+              direction: Axis.horizontal,
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
-      ));
+      );
 
       const posDelta = Offset(0, 10);
       const negDelta = Offset(0, -10);
@@ -103,18 +109,20 @@ void main() {
     testWidgets('cannot slide vertically if asked', (tester) async {
       final slidableController = SlidableController(const TestVSync());
 
-      await tester.pumpWidget(Center(
-        child: SizedBox(
-          height: 100,
-          width: 200,
-          child: SlidableGestureDetector(
-            enabled: false,
-            controller: slidableController,
-            direction: Axis.vertical,
-            child: const SizedBox.expand(),
+      await tester.pumpWidget(
+        Center(
+          child: SizedBox(
+            height: 100,
+            width: 200,
+            child: SlidableGestureDetector(
+              enabled: false,
+              controller: slidableController,
+              direction: Axis.vertical,
+              child: const SizedBox.expand(),
+            ),
           ),
         ),
-      ));
+      );
 
       const posDelta = Offset(0, 10);
       const negDelta = Offset(0, -10);
@@ -129,53 +137,113 @@ void main() {
       expect(slidableController.ratio, 0);
     });
 
-    testWidgets('handleEndGesture should be called with the correct direction',
-        (tester) async {
-      double? ratio = 0;
-      when(() => mockSlidableController.ratio)
-          .thenAnswer((realInvocation) => ratio!);
-      when(() => mockSlidableController.ratio = any())
-          .thenAnswer((realInvocation) {
-        ratio = realInvocation.positionalArguments[0] as double?;
-        return ratio!;
+    testWidgets(
+      'handleEndGesture should be called with the correct direction',
+      (tester) async {
+        double? ratio = 0;
+        when(() => mockSlidableController.ratio)
+            .thenAnswer((realInvocation) => ratio!);
+        when(() => mockSlidableController.movementRatio)
+            .thenAnswer((_) => ratio!);
+        when(() => mockSlidableController.dragTo(any()))
+            .thenAnswer((realInvocation) {
+              ratio = realInvocation.positionalArguments[0] as double?;
+            });
+
+        final mockDirection = ValueNotifier(0);
+        when(() => mockSlidableController.direction).thenReturn(mockDirection);
+
+        await tester.pumpWidget(
+          Center(
+            child: SizedBox(
+              height: 200,
+              width: 100,
+              child: SlidableGestureDetector(
+                controller: mockSlidableController,
+                direction: Axis.horizontal,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        );
+
+        const posDelta = Offset(10, 0);
+        const negDelta = Offset(-10, 0);
+        const speed = 10.0;
+
+        await tester.fling(finder, posDelta, speed);
+
+        verify(
+          () => mockSlidableController.endDrag(any(), GestureDirection.opening),
+        );
+
+        await tester.fling(finder, negDelta, speed);
+
+        verify(
+          () => mockSlidableController.endDrag(any(), GestureDirection.closing),
+        );
+      },
+    );
+
+    group('inside a vertical scrollable -', () {
+      late SlidableController slidableController;
+      late ScrollController scrollController;
+
+      Future<void> pumpList(WidgetTester tester) async {
+        slidableController = SlidableController(const TestVSync());
+        scrollController = ScrollController();
+        addTearDown(slidableController.dispose);
+        addTearDown(scrollController.dispose);
+
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: ListView(
+              controller: scrollController,
+              children: [
+                SizedBox(
+                  height: 100,
+                  child: SlidableGestureDetector(
+                    controller: slidableController,
+                    direction: Axis.horizontal,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                const SizedBox(height: 2000),
+              ],
+            ),
+          ),
+        );
+      }
+
+      testWidgets('a mostly vertical diagonal drag scrolls the list', (
+        tester,
+      ) async {
+        await pumpList(tester);
+
+        // Both components exceed the touch slop within the same event.
+        final gesture = await tester.startGesture(tester.getCenter(finder));
+        await gesture.moveBy(const Offset(30, -40));
+        await gesture.moveBy(const Offset(10, -20));
+        await gesture.up();
+        await tester.pump();
+
+        expect(slidableController.ratio, 0);
+        expect(scrollController.offset, greaterThan(0));
       });
 
-      final mockDirection = ValueNotifier(0);
-      when(() => mockSlidableController.direction).thenReturn(mockDirection);
+      testWidgets('a mostly horizontal diagonal drag slides', (tester) async {
+        await pumpList(tester);
 
-      await tester.pumpWidget(Center(
-        child: SizedBox(
-          height: 200,
-          width: 100,
-          child: SlidableGestureDetector(
-            controller: mockSlidableController,
-            direction: Axis.horizontal,
-            child: const SizedBox.expand(),
-          ),
-        ),
-      ));
+        final gesture = await tester.startGesture(tester.getCenter(finder));
+        await gesture.moveBy(const Offset(40, -30));
+        await gesture.moveBy(const Offset(20, -10));
+        await gesture.up();
+        await tester.pump();
 
-      const posDelta = Offset(10, 0);
-      const negDelta = Offset(-10, 0);
-      const speed = 10.0;
-
-      await tester.fling(finder, posDelta, speed);
-
-      verify(
-        () => mockSlidableController.dispatchEndGesture(
-          any(),
-          GestureDirection.opening,
-        ),
-      );
-
-      await tester.fling(finder, negDelta, speed);
-
-      verify(
-        () => mockSlidableController.dispatchEndGesture(
-          any(),
-          GestureDirection.closing,
-        ),
-      );
+        expect(slidableController.ratio, isNot(0));
+        expect(scrollController.offset, 0);
+      });
     });
   });
 }

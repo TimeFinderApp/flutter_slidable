@@ -121,7 +121,9 @@ class _DismissiblePaneState extends State<DismissiblePane> {
 
   Future<void> handleDismissGestureChanged() async {
     final ctrl = controller;
-    if (ctrl == null) return;
+    if (ctrl == null) {
+      return;
+    }
 
     final position = ctrl.animation.value;
 
@@ -134,7 +136,9 @@ class _DismissiblePaneState extends State<DismissiblePane> {
       // The widget may have been disposed during the async confirmDismiss
       // callback (e.g. if the action triggers a state change that rebuilds
       // the list). Guard all subsequent controller calls.
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       if (canDismiss) {
         ctrl.dismiss(
           ResizeRequest(widget.resizeDuration, widget.onDismissed),

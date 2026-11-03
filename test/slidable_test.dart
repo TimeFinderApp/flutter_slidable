@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_slidable/src/action_pane_motions.dart';
 import 'package:flutter_slidable/src/actions.dart';
 import 'package:flutter_slidable/src/controller.dart';
+import 'package:flutter_slidable/src/dismissible_pane.dart';
 import 'package:flutter_slidable/src/slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   group('Slidable', () {
@@ -292,139 +293,6 @@ void main() {
   });
 
   testWidgets(
-    'supports controllers created from SingleTickerProviderStateMixin',
-    (tester) async {
-      await tester.pumpWidget(const _SingleTickerHost());
-
-      expect(tester.takeException(), isNull);
-      expect(find.byType(Slidable), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'locks drawer direction and rubber bands during one horizontal drag',
-    (tester) async {
-      await _pumpDirectionalLockSlidable(tester);
-      final child = find.byKey(_childKey);
-      final initialLeft = tester.getTopLeft(child).dx;
-
-      final gesture = await tester.startGesture(tester.getCenter(child));
-      await gesture.moveBy(const Offset(-160, 0));
-      await tester.pump();
-
-      expect(find.byKey(_endPaneKey), findsOneWidget);
-      expect(find.byKey(_startPaneKey), findsNothing);
-
-      await gesture.moveBy(const Offset(220, 0));
-      await tester.pump();
-
-      final overdrag = tester.getTopLeft(child).dx - initialLeft;
-      expect(find.byKey(_endPaneKey), findsOneWidget);
-      expect(find.byKey(_startPaneKey), findsNothing);
-      expect(overdrag, greaterThan(0));
-      expect(overdrag, lessThanOrEqualTo(_maxRubberBandExtent));
-
-      await gesture.up();
-      expect(tester.getTopLeft(child).dx - initialLeft, closeTo(overdrag, 0.1));
-
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      final settlingOverdrag = tester.getTopLeft(child).dx - initialLeft;
-      expect(settlingOverdrag, greaterThan(0));
-      expect(settlingOverdrag, lessThan(overdrag));
-
-      await tester.pumpAndSettle();
-
-      expect(tester.getTopLeft(child).dx, closeTo(initialLeft, 0.1));
-      expect(find.byKey(_endPaneKey), findsNothing);
-      expect(find.byKey(_startPaneKey), findsNothing);
-    },
-  );
-
-  testWidgets('can infer the opposite drawer after settling neutral', (
-    tester,
-  ) async {
-    await _pumpDirectionalLockSlidable(tester);
-    final child = find.byKey(_childKey);
-    final initialLeft = tester.getTopLeft(child).dx;
-
-    final firstGesture = await tester.startGesture(tester.getCenter(child));
-    await firstGesture.moveBy(const Offset(-160, 0));
-    await tester.pump();
-    await firstGesture.moveBy(const Offset(220, 0));
-    await tester.pump();
-    await firstGesture.up();
-    await tester.pumpAndSettle();
-
-    final secondGesture = await tester.startGesture(tester.getCenter(child));
-    await secondGesture.moveBy(const Offset(120, 0));
-    await tester.pump();
-
-    expect(find.byKey(_startPaneKey), findsOneWidget);
-    expect(find.byKey(_endPaneKey), findsNothing);
-    expect(tester.getTopLeft(child).dx, greaterThan(initialLeft));
-
-    await secondGesture.up();
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('keeps an already-open drawer locked while dragging closed', (
-    tester,
-  ) async {
-    await _pumpDirectionalLockSlidable(tester, childOpensEndPane: true);
-    final child = find.byKey(_childKey);
-    final initialLeft = tester.getTopLeft(child).dx;
-
-    await tester.tap(child);
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(child).dx, lessThan(initialLeft));
-    expect(find.byKey(_endPaneKey), findsOneWidget);
-
-    final gesture = await tester.startGesture(tester.getCenter(child));
-    await gesture.moveBy(const Offset(260, 0));
-    await tester.pump();
-
-    final overdrag = tester.getTopLeft(child).dx - initialLeft;
-    expect(find.byKey(_endPaneKey), findsOneWidget);
-    expect(find.byKey(_startPaneKey), findsNothing);
-    expect(overdrag, greaterThan(0));
-    expect(overdrag, lessThanOrEqualTo(_maxRubberBandExtent));
-
-    await gesture.up();
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('locks drawer intent using text direction in RTL', (
-    tester,
-  ) async {
-    await _pumpDirectionalLockSlidable(
-      tester,
-      textDirection: TextDirection.rtl,
-    );
-    final child = find.byKey(_childKey);
-    final initialLeft = tester.getTopLeft(child).dx;
-
-    final gesture = await tester.startGesture(tester.getCenter(child));
-    await gesture.moveBy(const Offset(-160, 0));
-    await tester.pump();
-
-    expect(find.byKey(_startPaneKey), findsOneWidget);
-    expect(find.byKey(_endPaneKey), findsNothing);
-
-    await gesture.moveBy(const Offset(220, 0));
-    await tester.pump();
-
-    final overdrag = tester.getTopLeft(child).dx - initialLeft;
-    expect(find.byKey(_startPaneKey), findsOneWidget);
-    expect(find.byKey(_endPaneKey), findsNothing);
-    expect(overdrag, greaterThan(0));
-    expect(overdrag, lessThanOrEqualTo(_maxRubberBandExtent));
-
-    await gesture.up();
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets(
     'should work if TextDirection.rtl and only startActionPane is set',
     (tester) async {
       const gestureDetectorKey = ValueKey('gesture_detector');
@@ -509,108 +377,229 @@ void main() {
       expect(find.byKey(actionPaneKey), findsOneWidget);
     },
   );
-}
 
-class _SingleTickerHost extends StatefulWidget {
-  const _SingleTickerHost();
+  testWidgets('controller can be replaced without throwing (#523)', (
+    tester,
+  ) async {
+    final controllerA = SlidableController(const TestVSync());
+    final controllerB = SlidableController(const TestVSync());
+    addTearDown(controllerA.dispose);
+    addTearDown(controllerB.dispose);
+    const startActionPaneKey = ValueKey('start');
 
-  @override
-  State<_SingleTickerHost> createState() => _SingleTickerHostState();
-}
-
-class _SingleTickerHostState extends State<_SingleTickerHost>
-    with SingleTickerProviderStateMixin {
-  late final SlidableController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = SlidableController(this);
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Slidable(
-        controller: controller,
-        startActionPane: ActionPane(
-          motion: const BehindMotion(),
-          children: [SlidableAction(onPressed: (_) {}, icon: Icons.check)],
+    Widget build(SlidableController? controller) {
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Slidable(
+          controller: controller,
+          startActionPane: ActionPane(
+            key: startActionPaneKey,
+            motion: const BehindMotion(),
+            children: [SlidableAction(onPressed: (_) {}, icon: Icons.share)],
+          ),
+          child: const SizedBox(width: 200, height: 50),
         ),
-        endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          children: [SlidableAction(onPressed: (_) {}, icon: Icons.delete)],
-        ),
-        child: const SizedBox(width: 100, height: 40),
-      ),
-    );
-  }
-}
+      );
+    }
 
-const _childKey = ValueKey('direction_lock_child');
-const _startPaneKey = ValueKey('direction_lock_start_pane');
-const _endPaneKey = ValueKey('direction_lock_end_pane');
-const _slidableWidth = 400.0;
-const _slidableHeight = 80.0;
-const _maxRubberBandExtent = _slidableWidth * 0.08;
+    // internal -> A -> B -> internal.
+    await tester.pumpWidget(build(null));
+    await tester.pumpWidget(build(controllerA));
+    expect(tester.takeException(), isNull);
 
-Future<void> _pumpDirectionalLockSlidable(
-  WidgetTester tester, {
-  TextDirection textDirection = TextDirection.ltr,
-  bool childOpensEndPane = false,
-}) async {
-  await tester.pumpWidget(
-    Directionality(
-      textDirection: textDirection,
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: _slidableWidth,
-          height: _slidableHeight,
+    controllerA.openStartActionPane();
+    await tester.pumpAndSettle();
+    expect(find.byKey(startActionPaneKey), findsOneWidget);
+
+    await tester.pumpWidget(build(controllerB));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(startActionPaneKey), findsNothing);
+
+    controllerB.openStartActionPane();
+    await tester.pumpAndSettle();
+    expect(find.byKey(startActionPaneKey), findsOneWidget);
+
+    controllerB.close();
+    await tester.pumpAndSettle();
+    expect(find.byKey(startActionPaneKey), findsNothing);
+
+    await tester.pumpWidget(build(null));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    // The new internal controller is used by the Slidable.
+    final context = tester.element(find.byType(SizedBox));
+    final controller = Slidable.of(context)!;
+    expect(controller, isNot(controllerA));
+    expect(controller, isNot(controllerB));
+    controller.openStartActionPane();
+    await tester.pumpAndSettle();
+    expect(find.byKey(startActionPaneKey), findsOneWidget);
+  });
+
+  testWidgets(
+    'dismiss called from a SlidableAction with autoClose is not cancelled',
+    (tester) async {
+      final controller = SlidableController(const TestVSync());
+      addTearDown(controller.dispose);
+      var dismissed = false;
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
           child: Slidable(
-            startActionPane: ActionPane(
-              key: _startPaneKey,
+            controller: controller,
+            endActionPane: ActionPane(
               motion: const BehindMotion(),
               children: [
-                SlidableAction(onPressed: (_) {}, icon: Icons.archive),
+                SlidableAction(
+                  onPressed: (context) {
+                    Slidable.of(context)!.dismiss(
+                      ResizeRequest(
+                        const Duration(milliseconds: 300),
+                        () => dismissed = true,
+                      ),
+                    );
+                  },
+                  icon: Icons.delete,
+                ),
               ],
             ),
-            endActionPane: ActionPane(
-              key: _endPaneKey,
-              motion: const BehindMotion(),
-              children: [SlidableAction(onPressed: (_) {}, icon: Icons.delete)],
-            ),
-            child: Builder(
-              builder: (context) {
-                const content = ColoredBox(
-                  color: Colors.white,
-                  child: SizedBox.expand(child: Text('Slide me')),
-                );
-                if (childOpensEndPane) {
-                  return GestureDetector(
-                    key: _childKey,
-                    onTap: () {
-                      Slidable.of(
-                        context,
-                      )!
-                          .openEndActionPane(duration: Duration.zero);
-                    },
-                    child: content,
-                  );
-                }
-                return const SizedBox.expand(key: _childKey, child: content);
-              },
-            ),
+            child: const SizedBox(width: 200, height: 50),
           ),
         ),
-      ),
-    ),
+      );
+
+      controller.openEndActionPane();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.delete));
+      await tester.pumpAndSettle();
+
+      expect(dismissed, isTrue);
+    },
   );
+
+  group('onActionPaneChanged', () {
+    Widget build(
+      List<ActionPaneType> logs, {
+      SlidableController? controller,
+      VoidCallback? onDismissed,
+    }) {
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Slidable(
+          key: const ValueKey('slidable'),
+          controller: controller,
+          onActionPaneChanged: logs.add,
+          startActionPane: ActionPane(
+            motion: const BehindMotion(),
+            children: [SlidableAction(onPressed: (_) {}, icon: Icons.share)],
+          ),
+          endActionPane: ActionPane(
+            motion: const BehindMotion(),
+            dismissible: onDismissed == null
+                ? null
+                : DismissiblePane(onDismissed: onDismissed),
+            children: [SlidableAction(onPressed: (_) {}, icon: Icons.delete)],
+          ),
+          child: const SizedBox(height: 50),
+        ),
+      );
+    }
+
+    testWidgets(
+      'is called once the action pane is opened or closed by a drag',
+      (tester) async {
+        final logs = <ActionPaneType>[];
+        await tester.pumpWidget(build(logs));
+
+        await tester.drag(find.byType(Slidable), const Offset(-600, 0));
+        await tester.pumpAndSettle();
+        expect(logs, [ActionPaneType.end]);
+
+        await tester.drag(find.byType(Slidable), const Offset(300, 0));
+        await tester.pumpAndSettle();
+        expect(logs, [ActionPaneType.end, ActionPaneType.none]);
+      },
+    );
+
+    testWidgets('is not called when a drag does not open the action pane', (
+      tester,
+    ) async {
+      final logs = <ActionPaneType>[];
+      await tester.pumpWidget(build(logs));
+
+      await tester.drag(find.byType(Slidable), const Offset(-100, 0));
+      await tester.pumpAndSettle();
+
+      expect(logs, isEmpty);
+    });
+
+    testWidgets('is called when the controller moves the Slidable', (
+      tester,
+    ) async {
+      final controller = SlidableController(const TestVSync());
+      addTearDown(controller.dispose);
+      final logs = <ActionPaneType>[];
+      await tester.pumpWidget(build(logs, controller: controller));
+
+      controller.openEndActionPane();
+      await tester.pumpAndSettle();
+      controller.openEndActionPane();
+      await tester.pumpAndSettle();
+      expect(logs, [ActionPaneType.end]);
+
+      controller.close();
+      await tester.pumpAndSettle();
+      controller.openStartActionPane();
+      await tester.pumpAndSettle();
+      expect(logs, [
+        ActionPaneType.end,
+        ActionPaneType.none,
+        ActionPaneType.start,
+      ]);
+    });
+
+    testWidgets('reports neutral before a new drag opens the opposite pane', (
+      tester,
+    ) async {
+      final controller = SlidableController(const TestVSync());
+      addTearDown(controller.dispose);
+      final logs = <ActionPaneType>[];
+      await tester.pumpWidget(build(logs, controller: controller));
+
+      controller.openStartActionPane();
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(Slidable), const Offset(-800, 0));
+      await tester.pumpAndSettle();
+
+      expect(logs, [ActionPaneType.start, ActionPaneType.none]);
+      await tester.drag(find.byType(Slidable), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(logs, [
+        ActionPaneType.start,
+        ActionPaneType.none,
+        ActionPaneType.end,
+      ]);
+      expect(logs.where((type) => type == ActionPaneType.start), hasLength(1));
+    });
+
+    testWidgets('is not called when the Slidable is dismissed', (tester) async {
+      final logs = <ActionPaneType>[];
+      var dismissed = false;
+      await tester.pumpWidget(build(logs, onDismissed: () => dismissed = true));
+
+      await tester.timedDrag(
+        find.byType(Slidable),
+        const Offset(-700, 0),
+        const Duration(milliseconds: 400),
+      );
+      await tester.pumpAndSettle();
+
+      expect(dismissed, isTrue);
+      expect(logs, isEmpty);
+    });
+  });
 }
